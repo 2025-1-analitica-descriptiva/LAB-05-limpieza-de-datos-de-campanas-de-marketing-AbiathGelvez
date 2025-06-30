@@ -4,53 +4,72 @@ Escriba el codigo que ejecute la accion solicitada.
 
 # pylint: disable=import-outside-toplevel
 
+import os
+import zipfile
+import pandas as pd
+from datetime import datetime
 
 def clean_campaign_data():
-    """
-    En esta tarea se le pide que limpie los datos de una campaña de
-    marketing realizada por un banco, la cual tiene como fin la
-    recolección de datos de clientes para ofrecerls un préstamo.
+    input_folder = "files/input"
+    output_folder = "files/output"
+    os.makedirs(output_folder, exist_ok=True)
 
-    La información recolectada se encuentra en la carpeta
-    files/input/ en varios archivos csv.zip comprimidos para ahorrar
-    espacio en disco.
+    client_data = []
+    campaign_data = []
+    economics_data = []
 
-    Usted debe procesar directamente los archivos comprimidos (sin
-    descomprimirlos). Se desea partir la data en tres archivos csv
-    (sin comprimir): client.csv, campaign.csv y economics.csv.
-    Cada archivo debe tener las columnas indicadas.
+    for file in os.listdir(input_folder):
+        if file.endswith(".zip"):
+            zip_path = os.path.join(input_folder, file)
+            with zipfile.ZipFile(zip_path) as z:
+                csv_name = z.namelist()[0]  # Asume un solo CSV por ZIP
+                with z.open(csv_name) as f:
+                    df = pd.read_csv(f)
 
-    Los tres archivos generados se almacenarán en la carpeta files/output/.
+                    # CLIENT
+                    client_df = pd.DataFrame({
+                        "client_id": df["client_id"],
+                        "age": df["age"],
+                        "job": df["job"].str.replace(".", "", regex=False).str.replace("-", "_", regex=False),
+                        "marital": df["marital"],
+                        "education": df["education"]
+                            .str.replace(".", "_", regex=False)
+                            .replace("unknown", pd.NA),
+                        "credit_default": df["credit_default"].apply(lambda x: 1 if x == "yes" else 0),
+                        "mortgage": df["mortgage"].apply(lambda x: 1 if x == "yes" else 0),  # ← corregido aquí
+                    })
+                    client_data.append(client_df)
 
-    client.csv:
-    - client_id
-    - age
-    - job: se debe cambiar el "." por "" y el "-" por "_"
-    - marital
-    - education: se debe cambiar "." por "_" y "unknown" por pd.NA
-    - credit_default: convertir a "yes" a 1 y cualquier otro valor a 0
-    - mortage: convertir a "yes" a 1 y cualquier otro valor a 0
+                    # CAMPAIGN
+                    campaign_df = pd.DataFrame({
+                        "client_id": df["client_id"],
+                        "number_contacts": df["number_contacts"],
+                        "contact_duration": df["contact_duration"],
+                        "previous_campaign_contacts": df["previous_campaign_contacts"],
+                        "previous_outcome": df["previous_outcome"].apply(lambda x: 1 if x == "success" else 0),
+                        "campaign_outcome": df["campaign_outcome"].apply(lambda x: 1 if x == "yes" else 0),
+                        "last_contact_date": df.apply(
+                            lambda row: datetime.strptime(
+                                f"2022-{row['month']}-{int(row['day']):02}",
+                                "%Y-%b-%d"
+                            ).strftime("%Y-%m-%d"),
+                            axis=1
+                        )
+                    })
+                    campaign_data.append(campaign_df)
 
-    campaign.csv:
-    - client_id
-    - number_contacts
-    - contact_duration
-    - previous_campaing_contacts
-    - previous_outcome: cmabiar "success" por 1, y cualquier otro valor a 0
-    - campaign_outcome: cambiar "yes" por 1 y cualquier otro valor a 0
-    - last_contact_day: crear un valor con el formato "YYYY-MM-DD",
-        combinando los campos "day" y "month" con el año 2022.
+                    # ECONOMICS
+                    economics_df = pd.DataFrame({
+                        "client_id": df["client_id"],
+                        "cons_price_idx": df["cons_price_idx"],
+                        "euribor_three_months": df["euribor_three_months"],
+                    })
+                    economics_data.append(economics_df)
 
-    economics.csv:
-    - client_id
-    - const_price_idx
-    - eurobor_three_months
-
-
-
-    """
-
-    return
+    # Guardar resultados en CSV
+    pd.concat(client_data).to_csv(os.path.join(output_folder, "client.csv"), index=False)
+    pd.concat(campaign_data).to_csv(os.path.join(output_folder, "campaign.csv"), index=False)
+    pd.concat(economics_data).to_csv(os.path.join(output_folder, "economics.csv"), index=False)
 
 
 if __name__ == "__main__":
